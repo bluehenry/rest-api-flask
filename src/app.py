@@ -1,4 +1,5 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
+import json
 from validBookObject import *
 
 
@@ -14,6 +15,11 @@ books = [
         'name': 'The Cat In The Hat',
         'price': 6.99,
         'isbn': 97803400193
+    },
+    {
+        'name': 'The Odyssey',
+        'price': 0.01,
+        'isbn': 888
     }
 ]
 
@@ -41,8 +47,6 @@ def get_book_by_isbn(isbn):
 #     'isbn': 123456
 # }
 
-
-
 @app.route('/books', methods=['POST'])
 def add_book():
     request_data = request.get_json()
@@ -53,8 +57,66 @@ def add_book():
             "isbn": request_data['isbn']
         }
         books.insert(0, request_data)
-        return "True"
+        response = Response("", 201, mimetype='application/json')
+        response.headers['Location'] = "/books/" + str(new_book['isbn'])
+        return response
     else:
-        return "False"
+        invalidBookObjectErrorMsg = {
+            "error": "Invalid book object passed in request",
+            "helpString": "Data passed in similar to this {'name': 'bookname', 'price': 7.99, 'isbn': 123456}"
+        }
+        response = Response(json.dumps(invalidBookObjectErrorMsg), status=400, mimetype='application/json')
+        return response
+
+# PUT /books/888
+# {
+#   'name': 'The Odyssey'
+#   'price': 9.99
+# }
+# (1) no valid book object from our client
+#     -> not add the book to the store
+# valid book object has name and price field
+
+@app.route('/books/<int:isbn>', methods=['PUT'])
+def replace_book(isbn):
+    request_data = request.get_json()
+    new_book = {
+        'name': request_data['name'],
+        'price': request_data['price'],
+        'isbn': isbn
+    }
+    i = 0;
+    for book in books:
+        currentIsbn = book["isbn"]
+        if currentIsbn == isbn:
+            books[i] = new_book
+        i += 1
+    response = Response("", status=204)
+    return response
+
+
+# PATH /books/888
+# {
+#     'name': 'Harry Potter and the Chamber of Secrets'
+# }
+
+# PATH /books/888
+# {
+#     'price': 39.99
+# }
+@app.route('/books/<int:isbn>', methods=['PATCH'])
+def update_book(isbn):
+    request_data = request.get_json()
+    updated_book = {}
+    if("name" in request_data):
+        updated_book["name"] = request_data['name']
+    if("price" in request_data):
+        updated_book["price"] = request_data['price']
+    for book in books:
+        if book["isbn"] == isbn:
+            book.update(updated_book)
+    response = Response("", status=204)
+    response.headers['Location'] = "/books/" + str(isbn)
+    return response
 
 app.run(port=8080)
