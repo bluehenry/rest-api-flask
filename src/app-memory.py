@@ -1,19 +1,43 @@
 from flask import Flask, jsonify, request, Response
 import json
-
 from validBookObject import *
-from BookModel import *
-from settings import *
+
+app = Flask(__name__)
+
+books = [
+    {
+        'name': 'Green Eggs and Ham',
+        'price': 7.99,
+        'isbn': 97803400165
+    },
+    {
+        'name': 'The Cat In The Hat',
+        'price': 6.99,
+        'isbn': 97803400193
+    },
+    {
+        'name': 'The Odyssey',
+        'price': 0.01,
+        'isbn': 888
+    }
+]
 
 # Get /books
 @app.route('/books')
 def get_books():
-    return jsonify({'books': Book.get_all_books()})
+    return jsonify({'books': books})
 
 @app.route('/books/<int:isbn>')
 def get_book_by_isbn(isbn):
-    return_value = Book.get_book(isbn)
-    return jsonify(return_value)
+    return_val = {}
+    for book in books:
+        if book["isbn"] == isbn:
+            return_val = {
+                'name': book["name"],
+                'price': book["price"],
+                'isbn': book["isbn"]
+            }
+    return jsonify(return_val)
 
 # Post /books
 # {
@@ -26,11 +50,16 @@ def get_book_by_isbn(isbn):
 def add_book():
     request_data = request.get_json()
     if(validBookObject(request_data)):
-        Book.add_book(request_data['name'], request_data['price'], request_data['isbn'])
+        new_book = {
+            "name": request_data['name'],
+            "price": request_data['price'],
+            "isbn": request_data['isbn']
+        }
+        books.insert(0, request_data)
         response = Response("", 201, mimetype='application/json')
-        response.headers['Location'] = "/books/" + str(request_data['isbn'])
+        response.headers['Location'] = "/books/" + str(new_book['isbn'])
         return response
-
+    else:
         invalidBookObjectErrorMsg = {
             "error": "Invalid book object passed in request",
             "helpString": "Data passed in similar to this {'name': 'bookname', 'price': 7.99, 'isbn': 123456}"
@@ -50,14 +79,17 @@ def add_book():
 @app.route('/books/<int:isbn>', methods=['PUT'])
 def replace_book(isbn):
     request_data = request.get_json()
-    if(not validBookObject(request_data)):
-        invalidBookObjectErrorMsg = {
-            "error": "Invalid book object passed in request",
-            "helpString": "Data should be passed in simlar to this {'name': 'bookname', 'price': 7.99, 'isbn': 123456}"
-        }
-        response = Response(json.dumps(invalidBookObjectErrorMsg), status=400, mimetype='application/json')
-
-    Book.replace_book(isbn, request_data['name'], request_data['price'])
+    new_book = {
+        'name': request_data['name'],
+        'price': request_data['price'],
+        'isbn': isbn
+    }
+    i = 0;
+    for book in books:
+        currentIsbn = book["isbn"]
+        if currentIsbn == isbn:
+            books[i] = new_book
+        i += 1
     response = Response("", status=204)
     return response
 
@@ -74,18 +106,14 @@ def replace_book(isbn):
 @app.route('/books/<int:isbn>', methods=['PATCH'])
 def update_book(isbn):
     request_data = request.get_json()
-    if(not validBookObject(request_data)):
-        invalidBookObjectErrorMsg = {
-            "error": "Invalid book object passed in request",
-            "helpString": "Data should be passed in simlar to this {'name': 'bookname', 'price': 7.99, 'isbn': 123456}"
-        }
-        response = Response(json.dumps(invalidBookObjectErrorMsg), status=400, mimetype='application/json')
-
+    updated_book = {}
     if("name" in request_data):
-        Book.update_book_name(isbn, request_data['name'])
+        updated_book["name"] = request_data['name']
     if("price" in request_data):
-        Book.update_book_price(isbn, request_data['price'])
-
+        updated_book["price"] = request_data['price']
+    for book in books:
+        if book["isbn"] == isbn:
+            book.update(updated_book)
     response = Response("", status=204)
     response.headers['Location'] = "/books/" + str(isbn)
     return response
@@ -94,10 +122,13 @@ def update_book(isbn):
 
 @app.route('/books/<int:isbn>', methods=['DELETE'])
 def delete_book(isbn):
-    if(Book.delete_book(isbn)):
-        response = Response("", status=204)
-        return response
-
+    i = 0;
+    for book in books:
+        if book["isbn"] == isbn:
+            books.pop(i)
+            response = Response("", status=204)
+            return response
+        i += 1
     invalidBookObjectErrorMsg = {
         "error": "Book with the ISBN number that was provide was not found."
     }
